@@ -358,9 +358,17 @@ angular.module('vr.directives.slider', ['ngTouch']).directive('slider',
              * @param {Number} [ceiling]
              * @returns {Number}
              */
-            function roundStep(value, precision, step, floor, ceiling) {
-
+            function roundStep(value, precision, step, floor, ceiling, theModel) {
                 // precision is optional
+                // debugger;
+                if(isNaN(value)){
+                    if(arguments.length === 6){
+                        value = theModel;
+                    }
+                    value2 = 0;
+                } else{
+                    value2 = value;
+                }
                 if(angular.isUndefined(precision) || !precision) {
                     precision = 0;
                 }
@@ -375,16 +383,11 @@ angular.module('vr.directives.slider', ['ngTouch']).directive('slider',
                     floor = 0;
                 }
 
-                // value is optional
-                if(angular.isUndefined(value) || !value) {
-                    value = 0;
-                }
-
                 // how far from a step is the value
-                var remainder = (value - floor) % step;
+                var remainder = (value2 - floor) % step;
 
                 // round the value to a step
-                var roundedValue = remainder > (step / 2) ? value + step - remainder : value - remainder;
+                var roundedValue = remainder > (step / 2) ? value2 + step - remainder : value2 - remainder;
 
                 // ceiling is optional
                 if(angular.isUndefined(ceiling) || !ceiling) {
@@ -395,7 +398,11 @@ angular.module('vr.directives.slider', ['ngTouch']).directive('slider',
                 roundedValue = Math.min(Math.max(roundedValue, floor), ceiling);
 
                 // set the precision
-                return parseFloat(roundedValue.toFixed(precision));
+                if(isNaN(value)){
+                    return value;
+                } else{
+                    return parseFloat(roundedValue.toFixed(precision));
+                }
             }
 
             /**
@@ -443,7 +450,7 @@ angular.module('vr.directives.slider', ['ngTouch']).directive('slider',
                     "<span class='bar full'></span>" + // secondary bars used for dual knobs
                     "<span class='bar steps'><span class='bubble step' ng-repeat='step in stepBubbles()'></span></span>" + // step bubbles
                     "<span class='bar selection'></span><span class='bar unselected low'></span><span class='bar unselected high'></span>" + // the knobs
-                    "<span class='pointer low'></span><span class='pointer high'></span>" + // current value bubbles
+                    "<span class='pointer low' id='thePointer'></span><span class='pointer high'></span>" + // current value bubbles
                     "<span class='bubble low'></span><span class='bubble high'></span><span class='bubble middle'></span><span class='bubble selection'></span>" + // low, high, middle and selection bubbles
                     "<span class='bubble limit floor'></span><span class='bubble limit ceiling'></span>" + // upper and lower limit bubbles
                     "<input type='range' class='input low' /><input type='range' class='input high' /><input type='range' class='input selection' />", // range sliders used for browsers that support them
@@ -839,11 +846,15 @@ angular.module('vr.directives.slider', ['ngTouch']).directive('slider',
                                 angular.forEach(watchables, function(watchable) {
                                     
                                     // parse them to floats
-                                    scope[watchable] = parseFloat(scope[watchable]);
+                                    //Allow for initial value to not have to be a number
+                                    if(scope[watchable] !== scope.ngModel){
+                                        scope[watchable] = parseFloat(scope[watchable]);
+                                    }
 
                                     if(watchable == refLow || watchable == refHigh) {
                                         // this is the low or high value so bring them back in line with the steps
-                                        scope[watchable] = roundStep(scope[watchable], scope.precision, scope.step, scope.floor, scope.ceiling);
+
+                                        scope[watchable] = roundStep(scope[watchable], scope.precision, scope.step, scope.floor, scope.ceiling, scope.ngModel);
                                     } else if(watchable == 'buffer') {
                                         if(!scope.buffer || isNaN(scope.buffer) || scope.buffer < 0) {
                                             // the buffer is not valid, so set to 0
@@ -879,40 +890,6 @@ angular.module('vr.directives.slider', ['ngTouch']).directive('slider',
                                     scope.decodedValues[watchable] = scope.decodeRef(watchable);
 
                                 });
-
-                                if(isDualKnob) {
-                                    // if this is a dual knob slider
-
-                                    // make sure the low value is actually lower than the high value
-                                    if(scope[refHigh] < scope[refLow]) {
-                                        var temp = scope[refHigh];
-                                        scope[refHigh] = scope[refLow];
-                                        scope[refLow] = temp;
-                                    }
-
-                                    // get the difference between the knobs, but make sure it's rounded to a step
-                                    var diff = roundStep(scope[refHigh] - scope[refLow], scope.precision, scope.step);
-
-                                    if(scope.buffer > 0 && diff < scope.buffer) {
-                                        // we need a buffer but the difference is smaller than the required buffer
-
-                                        // so find the middle
-                                        var avg = scope.encode((scope.decodedValues[refLow] + scope.decodedValues[refHigh]) / 2);
-
-                                        // and set the knobs so they straddle the middle with the required amount of buffer
-                                        scope[refLow] = roundStep(avg - (scope.buffer / 2), scope.precision, scope.step, scope.floor, scope.ceiling);
-                                        scope[refHigh] = scope[refLow] + scope.buffer;
-
-                                        if(scope[refHigh] > scope.ceiling) {
-                                            // the high value is out of range
-
-                                            // so set the high value to the maximum
-                                            scope[refHigh] = scope.ceiling;
-                                            // but keep the buffer correct
-                                            scope[refLow] = scope.ceiling - scope.buffer;
-                                        }
-                                    }
-                                }
 
                                 // save the various dimensions we'll need
                                 barWidth = width(refs.fullBar);
@@ -1596,6 +1573,7 @@ angular.module('vr.directives.slider', ['ngTouch']).directive('slider',
                                     }
 
                                     // round the value to a step and assign the value
+                                    console.log('VAL ABOUT TO BE PASSED IN TO ROUNDSTEP IS scope.encode(newValue)', scope.encode(newValue));
                                     scope[ref] = roundStep(scope.encode(newValue), scope.precision, scope.step, scope.floor, scope.ceiling);
 
                                     // update the DOM
